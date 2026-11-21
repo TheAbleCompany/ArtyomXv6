@@ -19,7 +19,9 @@
 
 u64 kernel_cr3 = 0;
 
-extern u8 boot_pml4[];            /* boot.S — VA таблицы PML4 ядра */
+/* limine.c — PML4 Limine (после takeover_paging: PML4[511] — наше
+ * 1GiB прямое отображение, PML4[256..510] — HHDM Limine) */
+extern u64 kernel_cr3_phys;
 
 static u8 *frame_bitmap;
 static u64 nframes;
@@ -31,8 +33,8 @@ static u64 *zero_table(void) {
 }
 
 void paging_init(void) {
-    /* таблицы boot.S уже активны; берём их под управление */
-    kernel_cr3 = kv2ph((u64)boot_pml4);
+    /* таблицы Limine уже активны и захвачены; берём их под управление */
+    kernel_cr3 = kernel_cr3_phys;
 }
 
 u64 *walk_addr(u64 dir_phys, u64 va, int make) {

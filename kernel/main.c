@@ -1,10 +1,14 @@
-/* main.c — kmain: разбор multiboot2, инициализация подсистем, самотесты
- * (куча, кадры, VFS), запуск init из initrd и передача управления
- * планировщику. */
+/* main.c — kmain: инициализация подсистем, самотесты (куча, кадры, VFS),
+ * запуск init из initrd и передача управления планировщику.
+ *
+ * Port на Limine: разбор multiboot2 заменён на boot info из limine.c
+ * (bootinfo.h): карта памяти, модуль initrd (HHDM VA + размер). Магия
+ * загрузчика не проверяется — протокол Limine гарантирует целостность
+ * ответов. Остальное тело kmain не изменилось. */
 #include "types.h"
 #include "console.h"
 #include "serial.h"
-#include "multiboot2.h"
+#include "bootinfo.h"
 #include "gdt.h"
 #include "idt.h"
 #include "timer.h"
@@ -14,35 +18,6 @@
 #include "vfs.h"
 #include "initrd.h"
 #include "task.h"
-
-static mb2_memmap_entry_t memmap[32];
-static u32 memmap_count;
-static u64 mod_start, mod_end;
-
-static void parse_multiboot(u64 mbi_phys) {
-    u8 *mbi = (u8 *)p2v(mbi_phys);
-    u32 total = *(u32 *)mbi;
-    u8 *tag = mbi + 8;
-    u8 *end = mbi + total;
-    while (tag + sizeof(mb2_tag_t) <= end) {
-        mb2_tag_t *t = (mb2_tag_t *)tag;
-        if (t->type == MB2_TAG_END) break;
-        if (t->type == MB2_TAG_MEMMAP && t->size >= sizeof(mb2_memmap_t)) {
-            mb2_memmap_t *mm = (mb2_memmap_t *)tag;
-            u8 *e = tag + sizeof(mb2_memmap_t);
-            u8 *eend = tag + t->size;
-            while (e + sizeof(mb2_memmap_entry_t) <= eend && memmap_count < 32) {
-                memmap[memmap_count++] = *(mb2_memmap_entry_t *)e;
-                e += mm->entry_size;
-            }
-        } else if (t->type == MB2_TAG_MODULE && t->size >= sizeof(mb2_module_t)) {
-            mb2_module_t *m = (mb2_module_t *)tag;
-            mod_start = m->mod_start;
-            mod_end = m->mod_end;
-        }
-        tag += (t->size + 7u) & ~7u;
-    }
-}
 
 /* ---- самотесты (smoke) ---- */
 
@@ -103,17 +78,19 @@ static void test_vfs(void) {
     kprintf("[TEST] initrd: PASS\n");
 }
 
-void kmain(u64 mbi_phys, u64 magic) {
-    serial_init();
-    console_init();
-    kprintf("\n=== molloy-xv6-synth: x86_64, GRUB2 multiboot2 ===\n");
+void kmain(void) {
+    /* serial_init() и console_init() уже выполнены в limine_boot_main() */
+    kprintf("\n=== molloy-xv6-synth: x86_64, Limine boot protocol ===\n");
     kprintf("(Molloy tutorial layout + xv6 mechanisms)\n\n");
 
-    if (magic != MB2_BOOTLOADER_MAGIC)
-        panic("bad multiboot2 magic: 0x%llx", magic);
-    parse_multiboot(mbi_phys);
-    kprintf("[boot] memmap ranges=%u, module: 0x%x..0x%x\n",
-            memmap_count, (u32)mod_start, (u32)mod_end);
+    kprintf("[boot] bootloader: %s, cmdline: %s\n", boot_loader_name, boot_cmdline);
+    kprintf("[boot] hhdm: 0x%llx, cr3: 0x%llx\n", boot_hhdm_offset, kernel_cr3_phys);
+    kprintf("[boot] memmap ranges=%u, initrd: %u bytes\n",
+            boot_memmap_count, (u32)boot_initrd_size);
+    if (boot_initrd_size == 0)
+        panic("no initrd module (check limine.conf module_path)");
+    if (!boot_have_fb)
+        kprintf("[boot] WARNING: no framebuffer, console output = COM1 only\n");
 
     gdt_init();
     idt_init();
@@ -122,17 +99,17 @@ void kmain(u64 mbi_phys, u64 magic) {
     paging_init();
     heap_init();
     spin_init(&task_lock, "task");
-    frames_init(memmap, memmap_count, mod_start, mod_end);
+    frames_init(boot_memmap, boot_memmap_count,
+                boot_initrd_phys, boot_initrd_phys + boot_initrd_size);
     kprintf("[boot] paging + kheap + frames ready\n\n");
 
     test_heap();
     test_frames();
 
-    /* initrd: копируем модуль GRUB в кучу и монтируем */
-    u32 isz = (u32)(mod_end - mod_start);
-    if (isz == 0) panic("no initrd module");
+    /* initrd: модуль Limine уже в памяти (HHDM); копируем в кучу и монтируем */
+    u32 isz = (u32)boot_initrd_size;
     u8 *icopy = kmalloc(isz);
-    memcpy(icopy, (const void *)p2v(mod_start), isz);
+    memcpy(icopy, boot_initrd_va, isz);
     fs_root = initrd_mount((u64)icopy, isz);
     kprintf("\n");
     test_vfs();

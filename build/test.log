@@ -1,0 +1,35 @@
+
+[limine-boot] kernel entry, hhdm=ffff800000000000, base rev ok
+[takeover] kernel image relocated: 0000000007e10000 -> 0000000000100000
+[takeover] direct map ready, cr3=0000000007f7f000
+[limine-boot] paging takeover done, memmap=0000000000000013 initrd=0000000000000876
+
+=== molloy-xv6-synth: x86_64, Limine boot protocol ===
+(Molloy tutorial layout + xv6 mechanisms)
+
+[boot] bootloader: Limine, cmdline: 
+[boot] hhdm: 0xffff800000000000, cr3: 0x7f7f000
+[boot] memmap ranges=19, initrd: 2166 bytes
+[boot] paging + kheap + frames ready
+
+[TEST] heap: alloc/free/merge/align
+[TEST] heap: PASS (merge ok, aligned ok, phys ok)
+[TEST] frames: alloc/test/clear
+[TEST] frames: PASS
+
+[TEST] initrd: file list + read
+  /init.bin (inode 0)
+  /hello.txt (inode 1)
+  /hello.txt: "Hello from initrd!
+"
+[TEST] initrd: PASS
+
+[boot] spawning init from initrd...
+init: user mode OK, pid=1
+init: /hello.txt -> "Hello from initrd!
+"
+init: fork()...
+child: pid=2, exit(42)
+parent: wait()=2 status=42 -> PASS
+parent: sleep+wait -> PASS
+ALL TESTS PASSED

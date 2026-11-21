@@ -1,29 +1,41 @@
 /* linker.ld — ядро в «старшей половине» (higher half), PML4[511] = -2GiB.
- * VMA = KERNBASE + phys; GRUB (multiboot2) загружает сегменты по paddr.
- * Точка входа e_entry = физический адрес _start (GRUB входит в 32-бит режиме). */
+ * VMA = KERNBASE + phys; Limine (протокол limine) загружает сегменты по
+ * paddr из ELF и мапит их по линковочному VMA, после чего входит в ядро
+ * уже в 64-бит режиме на e_entry = _start (высокий VA).
+ *
+ * Требования Limine: маркеры запросов (.limine_requests_start / .limine_requests /
+ * .limine_requests_end) должны идти в указанном порядке по виртуальным адресам
+ * и лежать внутри загружаемых сегментов — поэтому они идут первыми секциями. */
 OUTPUT_FORMAT(elf64-x86-64)
-ENTRY(entry_stub)
+ENTRY(_start)
 
 KERNBASE = 0xFFFFFFFF80000000;
 
 SECTIONS
 {
-  /* Стаб входа: GRUB (multiboot2) проверяет, что e_entry лежит внутри
-   * загружаемого сегмента. Держим отдельный сегмент на 0x300000 (вне
-   * основного образа), откуда уходим в _start (физ. 0x100040). */
-  .entry_stub 0x300000 : AT(ADDR(.entry_stub)) { KEEP(*(.entry_stub)) }
-
   . = KERNBASE + 0x100000;
 
-  .multiboot : AT(ADDR(.multiboot) - KERNBASE) { KEEP(*(.multiboot)) }
-  .text      : AT(ADDR(.text)      - KERNBASE) { *(.text .text.*) }
-  .rodata    : AT(ADDR(.rodata)    - KERNBASE) { *(.rodata .rodata.*) }
-  .data      : AT(ADDR(.data)      - KERNBASE) { *(.data .data.*) }
-  .bss       : AT(ADDR(.bss)       - KERNBASE) { *(COMMON) *(.bss .bss.*) }
+  .limine_requests_start ALIGN(8) :
+      AT(ADDR(.limine_requests_start) - KERNBASE) {
+      KEEP(*(.limine_requests_start))
+  }
+
+  .limine_requests ALIGN(8) :
+      AT(ADDR(.limine_requests) - KERNBASE) {
+      KEEP(*(.limine_requests))
+  }
+
+  .limine_requests_end ALIGN(8) :
+      AT(ADDR(.limine_requests_end) - KERNBASE) {
+      KEEP(*(.limine_requests_end))
+  }
+
+  .text   ALIGN(16) : AT(ADDR(.text)   - KERNBASE) { *(.text .text.*) }
+  .rodata ALIGN(16) : AT(ADDR(.rodata) - KERNBASE) { *(.rodata .rodata.*) }
+  .data   ALIGN(16) : AT(ADDR(.data)   - KERNBASE) { *(.data .data.*) }
+  .bss    ALIGN(16) : AT(ADDR(.bss)    - KERNBASE) { *(COMMON) *(.bss .bss.*) }
 
   kern_end = ALIGN(., 4096);
-
-  boot_entry_phys = _start - KERNBASE;
 
   /DISCARD/ : { *(.eh_frame) *(.eh_frame.*) *(.comment) *(.note*) }
 }

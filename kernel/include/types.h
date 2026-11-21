@@ -23,8 +23,16 @@ typedef long long          s64;
 
 #define KERNBASE 0xFFFFFFFF80000000ULL
 
-static inline u64 p2v(u64 phys) { return phys + KERNBASE; }
-static inline u64 kv2ph(u64 va) { return va - KERNBASE; }
+/* Слайд физической загрузки ядра: Limine грузит образ НЕ по ELF paddr
+ * (физический KASLR), оставляя виртуальные адресы линковочными. Прямое
+ * отображение поэтому сдвинуто: p2v(p) = KERNBASE + p - kern_slide даёт
+ * VA, который транслируется на TRUE PA p. До takeover_paging() слайд = 0;
+ * до него обращений через p2v к памяти не бывает (мосты limine.c работают
+ * через HHDM-адреса напрямую). */
+extern u64 kern_slide;
+
+static inline u64 p2v(u64 phys) { return phys + KERNBASE - kern_slide; }
+static inline u64 kv2ph(u64 va)  { return va - KERNBASE + kern_slide; }
 
 static inline u64 align_up(u64 x, u64 a)   { return (x + a - 1) & ~(a - 1); }
 static inline u64 align_down(u64 x, u64 a) { return x & ~(a - 1); }

@@ -1,7 +1,9 @@
 # molloy-xv6-synth
 
 Синтез ядра: **структура туториалов Джеймса Моллоя** («Roll your own toy
-UNIX-clone OS») + **механизмы xv6** (MIT), x86_64, GRUB2/multiboot2.
+UNIX-clone OS») + **механизмы xv6** (MIT), x86_64, загрузчик **Limine**
+(boot protocol, BIOS + UEFI). Детали порта с GRUB2/multiboot2 — в
+[CHANGES-limine.md](CHANGES-limine.md).
 
 Задача: убрать известные недостатки туториалов Моллоя, сохранив их
 минимализм, добавив корректный и недостающий код из xv6.
@@ -9,24 +11,34 @@ UNIX-clone OS») + **механизмы xv6** (MIT), x86_64, GRUB2/multiboot2.
 ## Сборка и запуск
 
 ```bash
-make          # build/os.iso (ядро + initrd + GRUB)
-make run      # QEMU с выводом на serial/VGA
+make          # build/os.iso (BIOS+UEFI) и build/os.hdd (GPT, BIOS+UEFI)
+make run      # QEMU, ISO, BIOS
+make run-uefi # QEMU, ISO, UEFI (OVMF: OVMF_CODE=/usr/share/OVMF/OVMF_CODE_4M.fd)
 make test     # smoke-тест: куча, кадры, initrd, fork/wait/exit в ring 3
 ```
 
-Инструменты (gcc, ld, objcopy — системные). grub-mkrescue/qemu/xorriso
-могут отсутствовать в системе: скрипт `scripts/setup-tools.sh` скачивает
-нужные .deb (apt-get download) и распаковывает их без root в
-`/home/z/my-project/tools/root` (TOOLROOT в Makefile). Новые (ELF)
-grub-mkrescue игнорируют pkgdatadir — в Makefile модули передаются через
-`-d $(TOOLROOT)/usr/lib/grub/i386-pc`.
+Нужны: gcc, ld, objcopy, python3, xorriso (`XORRISO=` переопределяет путь),
+qemu-system-x86_64 для run/test. Утилита `limine` (bios-install) собирается
+автоматически из `limine-binary/limine.c`. Файлы Limine (v9.x binary:
+limine-bios.sys, limine-bios-cd.bin, limine-uefi-cd.bin, BOOTX64.EFI,
+BOOTIA32.EFI) вендорены в `limine-binary/`. Консоль ядра — линейный
+фреймбуфер (flanterm), поэтому вывод виден и в BIOS, и в UEFI без
+текстового режима.
 
 ## Архитектура
 
-- **Загрузка**: boot.S — multiboot2 → long mode → kmain. Прямое
-  отображение всей физики <1GiB по `KERNBASE = 0xFFFFFFFF80000000`
-  (аналог KERNBASE у xv6) одной 1GiB-страницей; identity-карта
-  используется только для перехода и сбрасывается.
+- **Загрузка**: Limine входит в ядро уже в long mode по высокому VA
+  (_start, boot.S → limine.c). Запросы Limine (framebuffer, hhdm, memmap,
+  module, bootloader info, cmdline, kernel address — base revision 3) дают
+  карту памяти, initrd и фреймбуфер. Так как Limine применяет физический
+  KASLR, образ копируется на линковочный физический адрес 0x100000, в
+  PML4[511] Limine вписывается прямое отображение PA0..1GiB ←→
+  `KERNBASE = 0xFFFFFFFF80000000` (аналог KERNBASE у xv6) 2MiB-страницами,
+  CR3 остаётся таблицей Limine (HHDM жив — фреймбуфер и структуры
+  загрузчика доступны).
+- **Консоль**: flanterm на фреймбуфере Limine + COM1 (38400). VGA-текст
+  (0xB8000) не используется: на UEFI его нет — это главный источник
+  «чёрного экрана» при загрузке на реальном железе.
 - **Память**: paging.c — 4-уровневый walk через `p2v()` (все таблицы в
   куче ядра), `clone_address_space`/`free_address_space` для fork/exit;
   битовая карта кадров (API Моллоя: alloc_frame/clear_frame/test_frame).
@@ -101,13 +113,25 @@ ALL TESTS PASSED                     <- exit(0) -> QEMU exit
 ## Структура
 
 ```
-Makefile linker.ld grub.cfg scripts/mkinitrd.py scripts/setup-tools.sh
-kernel/  boot.S isr.S swtch.S main.c console.c serial.c kprintf.c
-         gdt.c idt.c timer.c paging.c kheap.c spinlock.c task.c
-         vfs.c initrd.c syscall.c lib.c  include/*.h
+Makefile linker.ld limine.conf scripts/mkinitrd.py scripts/mkhdd.py
+limine-binary/  (вендоренные файлы Limine v9.x + host-утилита limine)
+flanterm/       (консоль на фреймбуфере, BSD-2-Clause)
+kernel/  boot.S limine.c isr.S swtch.S main.c console.c serial.c
+         kprintf.c gdt.c idt.c timer.c paging.c kheap.c spinlock.c
+         task.c vfs.c initrd.c syscall.c lib.c  include/*.h (вкл. limine.h)
 user/    usys.S ulib.c ulib.h init.c user.ld
 ```
 
 Примечания: пользовательский бинарник — плоский образ (без ELF-загрузчика,
 exec не входит в минимальный объём); /console — устройство VFS, привязанное
-к COM1+VGA; вытеснение — по IRQ0 (PIT 100 Гц).
+к COM1+фреймбуфер; вытеснение — по IRQ0 (PIT 100 Гц).
+
+## Реальное железо
+
+- **CD/DVD**: записать `build/os.iso` (El Torito: BIOS + UEFI).
+- **USB-флешка**: `sudo dd if=build/os.hdd of=/dev/sdX bs=4M status=progress`
+  (GPT: ESP с FAT32 + BIOS boot раздел; Limine уже установлен
+  `limine bios-install`). Загружается и в BIOS (CSM), и в UEFI.
+- Без фреймбуфера (нечастые серверные платы) ядро продолжает работу
+  только по COM1 — в консоли появится предупреждение.
+- Диагностика без экрана: `make run` печатает весь лог в COM1.
