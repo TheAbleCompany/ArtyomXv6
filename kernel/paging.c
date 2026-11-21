@@ -102,12 +102,12 @@ u64 alloc_frame(void) {
             return i * PAGE_SIZE;
         }
     }
-    panic("alloc_frame: out of memory");
+    panic("paging.c",105,"alloc_frame: out of memory");
 }
 
 void clear_frame(u64 phys) {
     u64 i = phys / PAGE_SIZE;
-    if (i >= nframes) panic("clear_frame: out of range 0x%llx", phys);
+    if (i >= nframes) panic("paging.c",110,"clear_frame: out of range 0x%llx", phys);
     frame_bitmap[i >> 3] &= ~(1u << (i & 7));
 }
 

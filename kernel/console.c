@@ -70,9 +70,26 @@ void kputs(const char *s) {
     while (*s) kputc(*s++);
 }
 
-void panic(const char *fmt, ...) {
+/* десятичное число в консоль: kputs() принимает только строку, поэтому
+ * int line нельзя печатать через kputs(line) — это разыменование мусорного
+ * указателя и тройной фолт */
+static void panic_print_int(long v) {
+    unsigned long u;
+    if (v < 0) { kputc('-'); u = (unsigned long)(-(v + 1)) + 1UL; }
+    else u = (unsigned long)v;
+    char t[20];
+    int i = 0;
+    do { t[i++] = (char)('0' + u % 10); u /= 10; } while (u);
+    while (i) kputc(t[--i]);
+}
+
+void panic(const char *file, int line, const char *fmt, ...) {
     cli();
-    kputs("\n!!! PANIC: ");
+    kputs("\n!!! PANIC ");
+    kputs(file);
+    kputc(':');
+    panic_print_int(line);
+    kputs(": ");
     va_list ap;
     char buf[512];
     va_start(ap, fmt);

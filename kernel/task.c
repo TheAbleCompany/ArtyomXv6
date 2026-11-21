@@ -209,7 +209,7 @@ void do_exit(int status) {
 
     push_off();
     swtch(&cur->ctx, sched_ctx);
-    panic("zombie task resumed");
+    panic("task.c",212,"zombie task resumed");
 }
 
 /* ---- wait (T-3) ---- */

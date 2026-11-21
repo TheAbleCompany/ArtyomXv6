@@ -9,4 +9,4 @@ void kputs(const char *s);
 void kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 #define KASSERT(cond) \
-    do { if (!(cond)) panic("assert failed: %s (%s:%d)", #cond, __FILE__, __LINE__); } while (0)
+    do { if (!(cond)) panic(__FILE__, __LINE__, "assert failed: %s", #cond); } while (0)

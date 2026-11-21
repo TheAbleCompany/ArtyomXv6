@@ -78,9 +78,9 @@ static void exception_handler(trapframe_t *tf) {
                     fa, current_task ? current_task->id : -1);
             do_exit(139);
         }
-        panic("page fault in kernel at 0x%llx, rip=0x%llx", fa, tf->rip);
+        panic("idt.c", 81, "page fault in kernel at 0x%llx, rip=0x%llx", fa, tf->rip);
     }
-    panic("exception %llu %s err=%llu rip=0x%llx",
+    panic("idt.c", 83, "exception %llu %s err=%llu rip=0x%llx",
           tf->int_no,
           tf->int_no < 32 ? ex_names[tf->int_no] : "?",
           tf->err, tf->rip);

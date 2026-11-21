@@ -74,7 +74,7 @@ static void test_vfs(void) {
     u32 n = vfs_read(f, 0, sizeof(buf) - 1, (u8 *)buf);
     kprintf("  /hello.txt: \"%s\"\n", buf);
     if (n != 19 || memcmp(buf, "Hello from initrd!\n", 19) != 0)
-        panic("initrd selftest: content mismatch");
+        panic("main.c", 77, "initrd selftest: content mismatch");
     kprintf("[TEST] initrd: PASS\n");
 }
 
@@ -88,7 +88,7 @@ void kmain(void) {
     kprintf("[boot] memmap ranges=%u, initrd: %u bytes\n",
             boot_memmap_count, (u32)boot_initrd_size);
     if (boot_initrd_size == 0)
-        panic("no initrd module (check limine.conf module_path)");
+        panic("main.c", 91,"no initrd module (check limine.conf module_path)");
     if (!boot_have_fb)
         kprintf("[boot] WARNING: no framebuffer, console output = COM1 only\n");
 
@@ -116,7 +116,7 @@ void kmain(void) {
 
     kprintf("\n[boot] spawning init from initrd...\n");
     if (spawn_initrd_program("init.bin") < 0)
-        panic("cannot spawn init");
+        panic("main.c", 119,"cannot spawn init");
 
     sti();
     scheduler();                    /* не возвращается */

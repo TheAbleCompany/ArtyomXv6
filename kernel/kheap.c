@@ -51,7 +51,7 @@ static int heap_ready = 0;
 static u64 early_top = 0;       /* bump-аллокатор до кучи (физ.) */
 
 static void idx_insert(header_t *h) {
-    if (idx_count >= INDEX_MAX) panic("kheap: index overflow");
+    if (idx_count >= INDEX_MAX) panic("kheap.c",54,"kheap: index overflow");
     u32 i = idx_count;
     while (i > 0 && idx[i - 1]->size > h->size) { idx[i] = idx[i - 1]; i--; }
     idx[i] = h;
@@ -114,7 +114,7 @@ void heap_init(void) {
 static void heap_expand(u64 add) {
     add = align_up(add, PAGE_SIZE);
     if ((u64)kheap_end + add > KHEAP_VA_BASE + KHEAP_MAX_SIZE)
-        panic("kheap: out of heap space");
+        panic("kheap.c",117,"kheap: out of heap space");
     header_t *h = (header_t *)kheap_end;
     header_t *prev = last_block();
     h->magic = HEAP_START_MAGIC;
@@ -153,7 +153,7 @@ static void *heap_alloc(u32 size, u32 align, u64 *phys_out) {
             break;
         }
     }
-    if (!h) panic("kheap: out of memory");
+    if (!h) panic("kheap.c",156,"kheap: out of memory");
 
     idx_remove(h);
 
@@ -210,15 +210,15 @@ static void *heap_alloc(u32 size, u32 align, u64 *phys_out) {
 void kfree(void *p) {
     if (!p) return;
     if (!heap_ready || (u64)p < KHEAP_VA_BASE || (u64)p >= KHEAP_VA_BASE + KHEAP_MAX_SIZE)
-        panic("kfree: pointer outside heap: %p", p);
+        panic("kheap.c",213,"kfree: pointer outside heap: %p", p);
 
     header_t *h = (header_t *)((u64)p - HDR);
     /* K-5: двойное освобождение — паника */
     if (h->magic != HEAP_START_MAGIC || h->hole != 0)
-        panic("kfree: corrupted or double free at %p", p);
+        panic("kheap.c",218,"kfree: corrupted or double free at %p", p);
     footer_t *f = footer_of(h);
     if (f->magic != HEAP_END_MAGIC || f->header != h)
-        panic("kfree: footer mismatch at %p", p);
+        panic("kheap.c",221,"kfree: footer mismatch at %p", p);
     h->hole = 1;
 
     /* K-6: слияние слева */

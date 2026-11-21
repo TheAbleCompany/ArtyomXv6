@@ -60,8 +60,12 @@ static inline void invlpg(u64 va) {
 }
 static inline void barrier(void) { __asm__ volatile("" ::: "memory"); }
 
-/* аварийная остановка (реализация в console.c) */
-void panic(const char *fmt, ...) __attribute__((noreturn, format(printf, 1, 2)));
+/* аварийная остановка (реализация в console.c).
+ * format(printf, 3, 4): строка формата — третий параметр. Атрибут обязателен:
+ * он ловит на КОМПИЛЯЦИИ вызовы со старой сигнатурой (например, KASSERT),
+ * несовпадение которых иначе даёт мусорные аргументы и тройной фолт в рантайме. */
+void panic(const char *file, int line, const char *fmt, ...)
+    __attribute__((noreturn, format(printf, 3, 4)));
 
 /* выход из QEMU через isa-debug-exit; порт — дефолт устройства
  * (iobase=1281=0x501 в QEMU 2.x..10.x), код выхода = (val<<1)|1 */

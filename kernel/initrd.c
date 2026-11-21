@@ -45,22 +45,22 @@ static fs_node_t *initrd_finddir(fs_node_t *node, const char *name) {
 
 fs_node_t *initrd_mount(u64 base_va, u32 size) {
     if (size < sizeof(initrd_header_t))
-        panic("initrd: image too small");
+        panic("initrd.c",48,"initrd: image too small");
     initrd_header_t *h = (initrd_header_t *)base_va;
     if (h->magic != INITRD_MAGIC)
-        panic("initrd: bad magic 0x%x", h->magic);
+        panic("initrd.c",51,"initrd: bad magic 0x%x", h->magic);
     image_base = base_va;
     image_size = size;
     nfiles = h->nfiles;
     if (nfiles == 0 || nfiles > 64)
-        panic("initrd: bad file count %u", nfiles);
+        panic("initrd.c",56,"initrd: bad file count %u", nfiles);
 
     file_headers = (initrd_file_header_t *)(base_va + sizeof(initrd_header_t));
     /* I-1: границы каждого файла */
     for (u32 i = 0; i < nfiles; i++) {
         u64 end = (u64)file_headers[i].offset + file_headers[i].length;
         if (end > size)
-            panic("initrd: file %u out of bounds", i);
+            panic("initrd.c",63,"initrd: file %u out of bounds", i);
     }
 
     fs_nodes = kmalloc(nfiles * sizeof(fs_node_t));

@@ -195,7 +195,7 @@ static void relocate_kernel(u64 phys_base) {
     if (boot_initrd_va != NULL && boot_initrd_size > 0) {
         u64 mstart = boot_initrd_phys, mend = mstart + boot_initrd_size;
         if (mstart < expected_phys + size && mend > expected_phys)
-            panic("initrd overlaps kernel relocation target");
+            panic("limine.c",198,"initrd overlaps kernel relocation target");
     }
     const u8 *src = (const u8 *)(boot_hhdm_offset + phys_base);
     u8 *dst = (u8 *)(boot_hhdm_offset + expected_phys);

@@ -38,7 +38,7 @@ void push_off(void) {
 void pop_off(void) {
     task_t *t = current_task;
     u64 n = t ? t->ncli : boot_ncli;
-    if (n == 0) panic("pop_off: underflow");
+    if (n == 0) panic("spinlock.c",41,"pop_off: underflow");
     if (t) {
         if (--t->ncli == 0 && t->intena) sti();
     } else {
